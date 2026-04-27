@@ -5,12 +5,14 @@ public class Driver {
     public double latitude;
     public double longitude;
     boolean available;
+    public int locationNode;
 
     public Driver(int id, double latitude, double longitude, boolean available) {
         this.id = id;
         this.latitude = latitude;
         this.longitude = longitude;
         this.available = available;
+        this.locationNode = locationNode;
     }
 
     public boolean isAvailable() {

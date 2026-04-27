@@ -14,7 +14,7 @@ public class DriverRepository {
         try {
             Connection con = DBConnection.getConnection();
 
-            String query = "SELECT * FROM drivers WHERE available = true";
+            String query = "SELECT * FROM drivers WHERE available = 1";
             Statement stmt = con.createStatement();
             ResultSet rs = stmt.executeQuery(query);
 
@@ -25,6 +25,7 @@ public class DriverRepository {
                         rs.getDouble("longitude"),
                         rs.getBoolean("available")
                 );
+                d.locationNode =1;
                 drivers.add(d);
             }
 

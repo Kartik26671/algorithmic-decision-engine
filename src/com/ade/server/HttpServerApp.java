@@ -1,5 +1,6 @@
 package com.ade.server;
 
+import com.ade.graph.Graph;
 import com.ade.repository.*;
 import com.ade.services.AssignmentService;
 import com.ade.models.*;
@@ -32,7 +33,7 @@ public class HttpServerApp {
         public void handle(HttpExchange exchange) {
 
             try {
-                //  Only allow GET
+                //Only allow GET
                 if (!exchange.getRequestMethod().equalsIgnoreCase("GET")) {
                     exchange.sendResponseHeaders(405, -1);
                     return;
@@ -43,42 +44,63 @@ public class HttpServerApp {
                 AssignmentRepository assignmentRepo = new AssignmentRepository();
                 AssignmentService service = new AssignmentService();
 
-                // ALWAYS initialize with something (avoid blank)
-                StringBuilder response = new StringBuilder("Starting assignment...\n");
-
                 List<Order> orders = orderRepo.getPendingOrders();
+                List<Driver> drivers = driverRepo.getAvailableDrivers();
 
-                //handle empty case
+                StringBuilder response = new StringBuilder();
+
+                //Edge case: no orders
                 if (orders.isEmpty()) {
-                    response.append("No pending orders found\n");
-                }
+                    response.append("No pending orders\n");
+                } else {
 
-                for (Order o : orders) {
+                    response.append("Starting DP assignment...\n");
 
-                    List<Driver> drivers = driverRepo.getAvailableDrivers();
+                    Graph graph = service.buildGraph();
 
-                    Driver assigned = service.assignDriver(o, drivers);
+                    for (Driver d : drivers) {
 
-                    if (assigned != null) {
+                        if (!d.isAvailable()) continue;
 
-                        assignmentRepo.saveAssignment(o.id, assigned.id, 10.0);
-                        driverRepo.markDriverUnavailable(assigned.id);
-                        orderRepo.markOrderAssigned(o.id);
+                        //  DP call (capacity = 30)
+                        List<Order> selected = service.getOptimalOrders(orders, 50,d.locationNode);
 
-                        response.append("Order ")
-                                .append(o.id)
-                                .append(" -> Driver ")
-                                .append(assigned.id)
-                                .append("\n");
+                        if (selected.isEmpty()) {
+                            continue;
+                        }
 
-                    } else {
-                        response.append("No driver available for Order ")
-                                .append(o.id)
-                                .append("\n");
+                        response.append("Driver ")
+                                .append(d.id)
+                                .append(" assigned orders: ");
+
+
+                        for (Order o : selected) {
+                            int dist = graph.shortestPath(d.locationNode,o.locationNode);
+
+                            assignmentRepo.saveAssignment(o.id, d.id, dist);
+                            orderRepo.markOrderAssigned(o.id);
+
+                            response.append("Order ")
+                                    .append(o.id)
+                                    .append(" (dist=")
+                                    .append(dist)
+                                    .append(") ");
+                        }
+
+                        // mark driver unavailable
+                        driverRepo.markDriverUnavailable(d.id);
+
+                        response.append("\n");
+
+                        // remove assigned orders
+                        orders.removeAll(selected);
+
+                        // stop if no orders left
+                        if (orders.isEmpty()) break;
                     }
                 }
 
-                // CORRECT BYTE HANDLING
+                // IMPORTANT: Always send response
                 byte[] responseBytes = response.toString().getBytes();
 
                 exchange.sendResponseHeaders(200, responseBytes.length);
